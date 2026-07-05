@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/freecad-agent/shared/context.schema.json",
+  "title": "Document Perception Context",
+  "description": "Format of the textual description of the FreeCAD document passed to the model (the agent's 'eyes'). Stated goal: be CONCISE so as not to saturate the context of small local models. Two levels: overview (always, cheap) and detail (on-demand, chosen by the agent = geometric RAG). Open issue: empirically tune the token budget for small local models (see Phase 3 of the plan).",
+  "version": "0.1.0",
+
+  "$defs": {
+    "documentOverview": {
+      "type": "object",
+      "description": "Overview: 'what is in the document?'. Must stay small.",
+      "required": ["document_name", "object_count", "objects", "bounding_box"],
+      "properties": {
+        "document_name": { "type": "string" },
+        "object_count": { "type": "integer" },
+        "units": { "type": "string", "default": "mm" },
+        "bounding_box": {
+          "type": "object",
+          "description": "overall bounding box of the document",
+          "properties": {
+            "min": { "type": "array", "items": { "type": "number" } },
+            "max": { "type": "array", "items": { "type": "number" } }
+          }
+        },
+        "objects": {
+          "type": "array",
+          "description": "one synthetic line per object — NO detailed geometry here",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "label"],
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string", "description": "e.g. Part::Box, PartDesign::Body, Sketch" },
+              "label": { "type": "string", "description": "name visible to the user" },
+              "visible": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+
+    "objectDetail": {
+      "type": "object",
+      "description": "Close-up look at a single object: emitted only when the agent requests it.",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "label": { "type": "string" },
+        "dimensions": { "type": "object", "description": "relevant parameters/dimensions of the object" },
+        "bounding_box": {
+          "type": "object",
+          "properties": {
+            "min": { "type": "array", "items": { "type": "number" } },
+            "max": { "type": "array", "items": { "type": "number" } }
+          }
+        },
+        "topology": {
+          "type": "object",
+          "description": "synthetic counts, not the full mesh",
+          "properties": {
+            "faces": { "type": "integer" },
+            "edges": { "type": "integer" },
+            "vertices": { "type": "integer" }
+          }
+        },
+        "named_subelements": {
+          "type": "array",
+          "description": "relevant faces/edges the agent can reference in commands",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ref": { "type": "string", "description": "e.g. Face3, Edge7" },
+              "kind": { "type": "string", "enum": ["face", "edge", "vertex"] },
+              "hint": { "type": "string", "description": "useful description, e.g. 'top face', 'edge along X'" }
+            }
+          }
+        },
+        "feasibility_notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "real constraints useful for feasibility checking (e.g. 5mm thickness) — principle 7"
+        }
+      }
+    }
+  }
+}

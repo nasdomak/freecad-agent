@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/freecad-agent/shared/protocol.schema.json",
+  "title": "Bridge Protocol (add-on <-> engine)",
+  "description": "Messages of the bridge between the FreeCAD add-on and the AI engine. Transport: local TCP socket on 127.0.0.1 (ephemeral port, token handshake). Message format: JSON-RPC 2.0. Bidirectional communication: the engine can call methods on the add-on (e.g. run command, give perception) and vice versa (e.g. notify a user event).",
+  "version": "0.1.0",
+
+  "$defs": {
+    "jsonrpcRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "method", "id"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "method": { "type": "string" },
+        "params": { "type": "object" },
+        "id": { "type": ["string", "integer"] }
+      }
+    },
+    "jsonrpcNotification": {
+      "type": "object",
+      "required": ["jsonrpc", "method"],
+      "not": { "required": ["id"] },
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "method": { "type": "string" },
+        "params": { "type": "object" }
+      }
+    },
+    "jsonrpcResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "id"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": ["string", "integer", "null"] },
+        "result": {},
+        "error": { "$ref": "#/$defs/jsonrpcError" }
+      },
+      "oneOf": [{ "required": ["result"] }, { "required": ["error"] }]
+    },
+    "jsonrpcError": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "integer" },
+        "message": { "type": "string" },
+        "data": {}
+      }
+    }
+  },
+
+  "handshake": {
+    "description": "At start-up, the engine presents a shared token (passed by the add-on when the process starts). The add-on rejects connections without a valid token.",
+    "method": "session.hello",
+    "params": {
+      "token": "string (ephemeral shared secret)",
+      "engine_version": "string",
+      "protocol_version": "string (semver, must match this file)"
+    }
+  },
+
+  "methods": {
+    "_comment": "Catalog of RPC methods for v0.1. ENGINE->ADDON are called by the engine towards FreeCAD; ADDON->ENGINE are called by the add-on towards the engine.",
+
+    "engine_to_addon": {
+      "command.execute": {
+        "description": "Run a structured-vocabulary command inside an undoable transaction.",
+        "params": { "$ref": "commands.schema.json#/$defs/commandInvocation" },
+        "result": { "$ref": "commands.schema.json#/$defs/commandResult" }
+      },
+      "python.execute": {
+        "description": "Run free Python on FreeCAD. REQUIRES transparency: the add-on shows the code and an unambiguous banner before/during execution (principle 5).",
+        "params": {
+          "code": "string (Python source)",
+          "reason": "string (why the vocabulary wasn't enough — shown to the user)"
+        },
+        "result": { "$ref": "commands.schema.json#/$defs/commandResult" }
+      },
+      "perception.overview": {
+        "description": "Cheap overview of the active document.",
+        "params": {},
+        "result": { "$ref": "context.schema.json#/$defs/documentOverview" }
+      },
+      "perception.detail": {
+        "description": "Close-up look at an object/face chosen by the agent (geometric RAG).",
+        "params": { "target": "string (object id, or reference to a sub-element)" },
+        "result": { "$ref": "context.schema.json#/$defs/objectDetail" }
+      },
+      "transaction.rollback": {
+        "description": "Undo the last transaction (safety net, principle 6).",
+        "params": { "transaction_id": "string" },
+        "result": { "ok": "boolean" }
+      },
+      "ui.confirm": {
+        "description": "Ask for human confirmation ONLY for irreversible actions (e.g. overwriting a file).",
+        "params": { "message": "string", "danger": "boolean" },
+        "result": { "confirmed": "boolean" }
+      },
+      "ui.highlight": {
+        "description": "Highlight an element on screen for disambiguation ('do you mean this one?').",
+        "params": { "target": "string" },
+        "result": { "ok": "boolean" }
+      }
+    },
+
+    "addon_to_engine": {
+      "user.prompt": {
+        "description": "The user sends a natural-language request. This is the real AI agent's channel (Phase 2+): the engine interprets the text and produces one or more commands. In Phase 1 (no AI) it is NOT implemented (the engine replies with a polite refusal).",
+        "params": { "text": "string", "selection": "array (ids of elements selected in FreeCAD, optional)", "ai_timeout": "number (optional, seconds; per-call local-model timeout chosen in the panel. 0 or absent = UNLIMITED (default); a positive value caps each model call and overrides FREECAD_AGENT_OLLAMA_TIMEOUT)" },
+        "result": { "accepted": "boolean", "task_id": "string", "cancelled": "boolean (optional, true if stopped via user.cancel)" }
+      },
+      "command.request": {
+        "description": "The user requests the execution of an ALREADY-structured command (chosen from the panel, not natural language). The engine VALIDATES it against commands.schema.json and, if valid, forwards it to the add-on via 'command.execute' (exercising both directions of the bridge). In Phase 1 it is the main channel of the 'fake brain'; it stays useful with the AI too, as an 'expert mode' that bypasses language interpretation. The engine may emit 'agent.status' notifications during processing.",
+        "params": { "$ref": "commands.schema.json#/$defs/commandInvocation" },
+        "result": { "$ref": "commands.schema.json#/$defs/commandResult" }
+      },
+      "user.cancel": {
+        "description": "The user interrupts the running task.",
+        "params": { "task_id": "string" },
+        "result": { "ok": "boolean" }
+      }
+    },
+
+    "engine_to_addon_notifications": {
+      "agent.status": {
+        "description": "Stream of agent status towards the UI (progress, plan step, self-correction outcome).",
+        "params": { "task_id": "string", "phase": "string", "message": "string", "privacy": "string (local|remote)" }
+      }
+    }
+  }
+}

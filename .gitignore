@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Engine environment (created on first start, never versioned)
+engine/.venv/
+
+# Models and weights (NEVER in the repo — external to the package, principle 3)
+*.gguf
+*.safetensors
+*.bin
+models/
+
+# Secrets (user API keys — never versioned, local-first)
+*.key
+.env
+secrets.*
+
+# Test/run artifacts
+tests_output.txt
+engine.log
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# FreeCAD installers (heavy, outside the code repo)
+000___Installer/

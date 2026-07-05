@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/freecad-agent/shared/commands.schema.json",
+  "title": "Structured Vocabulary",
+  "description": "The structured vocabulary as neutral DATA (principle 5). The engine reads this file to know which commands exist and with which parameters (for tool calling); the add-on provides the IMPLEMENTATION in addon/ai_copilot/executor/vocabulary/. Adding a command = one entry here + one function in the executor. This is v0.1: a minimal catalog. Units are mm and degrees unless stated otherwise.",
+  "version": "0.5.0",
+
+  "$defs": {
+    "commandInvocation": {
+      "type": "object",
+      "required": ["cmd", "params"],
+      "properties": {
+        "cmd": { "type": "string", "description": "command name, must exist in 'catalog'" },
+        "params": { "type": "object" }
+      }
+    },
+    "commandResult": {
+      "type": "object",
+      "required": ["ok", "transaction_id"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "transaction_id": { "type": "string", "description": "id of the undoable transaction the action ran within" },
+        "created_ids": { "type": "array", "items": { "type": "string" }, "description": "ids of the FreeCAD objects created/modified" },
+        "recompute_ok": { "type": "boolean", "description": "outcome of the recompute (input for the self-correction loop)" },
+        "error": { "type": "string", "description": "message when ok=false (e.g. geometrically impossible operation)" }
+      }
+    }
+  },
+
+  "catalog": {
+    "_comment": "Each command declares its parameters as a mini JSON Schema, so the engine can generate and validate them. Initial catalog; it grows phase by phase.",
+
+    "create_box": {
+      "summary": "Create a box.",
+      "params": {
+        "type": "object",
+        "required": ["length", "width", "height"],
+        "properties": {
+          "length": { "type": "number", "minimum": 0 },
+          "width": { "type": "number", "minimum": 0 },
+          "height": { "type": "number", "minimum": 0 },
+          "placement": { "type": "array", "items": { "type": "number" }, "description": "[x,y,z] origin, optional" }
+        }
+      }
+    },
+    "create_cylinder": {
+      "summary": "Create a cylinder.",
+      "params": {
+        "type": "object",
+        "required": ["radius", "height"],
+        "properties": {
+          "radius": { "type": "number", "minimum": 0 },
+          "height": { "type": "number", "minimum": 0 },
+          "placement": { "type": "array", "items": { "type": "number" } }
+        }
+      }
+    },
+    "drill_hole": {
+      "summary": "Drill a cylindrical hole into an existing body.",
+      "params": {
+        "type": "object",
+        "required": ["target", "diameter", "depth"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the body to drill" },
+          "diameter": { "type": "number", "minimum": 0 },
+          "depth": { "type": "number", "minimum": 0 },
+          "position": { "type": "array", "items": { "type": "number" }, "description": "point on the face [x,y,z]" }
+        }
+      }
+    },
+    "create_sketch": {
+      "summary": "Create a 2D sketch (a real Sketcher sketch) to be turned into a solid with 'extrude'. Choose a 'shape' ('rectangle' or 'circle') on a standard 'plane'. The new object is named 'Sketch'; pass that name as the 'target' of 'extrude'. A rectangle needs width and height; a circle needs radius.",
+      "params": {
+        "type": "object",
+        "required": ["shape"],
+        "properties": {
+          "shape": { "type": "string", "enum": ["rectangle", "circle"], "description": "profile to draw" },
+          "plane": { "type": "string", "enum": ["XY", "XZ", "YZ"], "description": "reference plane the sketch lies on (default XY)" },
+          "width": { "type": "number", "minimum": 0, "description": "rectangle width (required when shape='rectangle')" },
+          "height": { "type": "number", "minimum": 0, "description": "rectangle height (required when shape='rectangle')" },
+          "radius": { "type": "number", "minimum": 0, "description": "circle radius (required when shape='circle')" },
+          "placement": { "type": "array", "items": { "type": "number" }, "description": "[x,y,z] origin offset, optional" }
+        }
+      }
+    },
+    "extrude": {
+      "summary": "Extrude a sketch/profile into a solid. The target is usually the 'Sketch' made by create_sketch or sketch_on_face. distance is the height; negative reverses, symmetric extrudes both ways. Set op='cut' to make a POCKET: the profile is pushed INTO the body it sits on and the material is removed (the sketch must be on a face, via sketch_on_face).",
+      "params": {
+        "type": "object",
+        "required": ["target", "distance"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the sketch/profile (e.g. 'Sketch')" },
+          "distance": { "type": "number" },
+          "symmetric": { "type": "boolean", "default": false },
+          "op": { "type": "string", "enum": ["add", "cut"], "description": "'add' (default) makes a new solid; 'cut' makes a pocket by removing material from the body the sketch sits on" }
+        }
+      }
+    },
+    "chamfer": {
+      "summary": "Bevel (chamfer) a body's edges. By default it chamfers ALL edges; set 'where' to pick a group, or list explicit 'edges' ids. You normally do NOT need to list edges.",
+      "params": {
+        "type": "object",
+        "required": ["target", "size"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the body to chamfer" },
+          "where": { "type": "string", "enum": ["all", "top", "bottom", "vertical", "horizontal"], "description": "which edges to chamfer when 'edges' is omitted (default: all). The tool resolves the real edges itself." },
+          "edges": { "type": "array", "items": { "type": "string" }, "description": "OPTIONAL explicit edge ids (e.g. 'Edge3'); omit to use 'where' instead" },
+          "size": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "fillet": {
+      "summary": "Round (fillet) a body's edges. By default it rounds ALL edges; set 'where' to pick a group, or list explicit 'edges' ids. You normally do NOT need to list edges.",
+      "params": {
+        "type": "object",
+        "required": ["target", "radius"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the body to fillet" },
+          "where": { "type": "string", "enum": ["all", "top", "bottom", "vertical", "horizontal"], "description": "which edges to round when 'edges' is omitted (default: all). The tool resolves the real edges itself." },
+          "edges": { "type": "array", "items": { "type": "string" }, "description": "OPTIONAL explicit edge ids (e.g. 'Edge3'); omit to use 'where' instead" },
+          "radius": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "move": {
+      "summary": "Move (translate) an existing object. Prefer 'by' [dx,dy,dz] for a relative move; use 'to' [x,y,z] for an absolute position. Reversible (changes the object's Placement). Units: mm.",
+      "params": {
+        "type": "object",
+        "required": ["target"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the object to move" },
+          "by": { "type": "array", "items": { "type": "number" }, "description": "relative translation [dx,dy,dz] in mm (recommended)" },
+          "to": { "type": "array", "items": { "type": "number" }, "description": "absolute position [x,y,z] in mm (alternative to 'by')" }
+        }
+      }
+    },
+    "rotate": {
+      "summary": "Rotate an existing object around an axis by an angle in degrees. Reversible (changes the object's Placement). By default it rotates around Z through the object's centre.",
+      "params": {
+        "type": "object",
+        "required": ["target", "angle"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the object to rotate" },
+          "angle": { "type": "number", "description": "rotation angle in degrees (positive = counter-clockwise)" },
+          "axis": { "type": "string", "enum": ["X", "Y", "Z"], "description": "rotation axis (default Z)" },
+          "center": { "type": "array", "items": { "type": "number" }, "description": "[x,y,z] pivot point, optional (default: the object's bounding-box centre)" }
+        }
+      }
+    },
+    "mirror": {
+      "summary": "Mirror (reflect) an existing object across a standard plane, keeping the original. Creates a new mirrored copy. Give axes/planes as letters, never as raw vectors.",
+      "params": {
+        "type": "object",
+        "required": ["target"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the object to mirror" },
+          "plane": { "type": "string", "enum": ["XY", "XZ", "YZ"], "description": "mirror plane (default YZ = mirror left/right across X)" },
+          "base": { "type": "array", "items": { "type": "number" }, "description": "[x,y,z] point the mirror plane passes through, optional (default: origin)" }
+        }
+      }
+    },
+    "array": {
+      "summary": "Make a pattern of copies of an existing object. 'pattern' is 'linear' (a row) or 'polar' (around an axis). 'count' is the TOTAL number of items including the original. Linear needs 'spacing' and a 'direction'; polar needs an 'angle' and an 'axis'.",
+      "params": {
+        "type": "object",
+        "required": ["target", "pattern", "count"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the object to copy" },
+          "pattern": { "type": "string", "enum": ["linear", "polar"], "description": "row of copies (linear) or copies around an axis (polar)" },
+          "count": { "type": "integer", "minimum": 1, "description": "TOTAL number of items, the original included" },
+          "spacing": { "type": "number", "description": "distance between items in mm (required for linear)" },
+          "direction": { "type": "string", "enum": ["X", "Y", "Z"], "description": "direction of the linear row (default X)" },
+          "angle": { "type": "number", "description": "total angle in degrees to spread polar copies over (default 360 = full circle)" },
+          "axis": { "type": "string", "enum": ["X", "Y", "Z"], "description": "rotation axis for a polar pattern (default Z)" },
+          "center": { "type": "array", "items": { "type": "number" }, "description": "[x,y,z] point the polar axis passes through, optional (default: the file origin [0,0,0]). The items orbit THIS centre, not the object's own centre." },
+          "radius": { "type": "number", "minimum": 0, "description": "polar only, optional: radius of the circle. If given, the items are placed on a circle of this radius around the centre; if omitted, they orbit at the object's current distance from the centre." }
+        }
+      }
+    },
+    "sketch_on_face": {
+      "summary": "Create a 2D sketch attached to a FLAT face of an existing object, ready to extrude (e.g. to add a boss or cut a pocket). Pick the face with 'where' ('top' or 'bottom'); the tool resolves the real face itself, so you do NOT guess a face number. Choose 'shape' ('rectangle' or 'circle'); a rectangle needs width and height, a circle needs radius. The new sketch is named 'Sketch'; extrude it next (use op='cut' for a pocket).",
+      "params": {
+        "type": "object",
+        "required": ["target", "shape"],
+        "properties": {
+          "target": { "type": "string", "description": "id of the object that owns the face" },
+          "where": { "type": "string", "enum": ["top", "bottom"], "description": "pick the face by position; the tool finds the real face index (default top)" },
+          "face": { "type": "string", "description": "OPTIONAL explicit face id like 'Face6'; prefer 'where' and let the tool resolve it" },
+          "shape": { "type": "string", "enum": ["rectangle", "circle"], "description": "profile to draw on the face" },
+          "width": { "type": "number", "minimum": 0, "description": "rectangle width (required when shape='rectangle')" },
+          "height": { "type": "number", "minimum": 0, "description": "rectangle height (required when shape='rectangle')" },
+          "radius": { "type": "number", "minimum": 0, "description": "circle radius (required when shape='circle')" },
+          "offset": { "type": "number", "description": "optional gap between the face and the sketch, mm" }
+        }
+      }
+    },
+    "boolean": {
+      "summary": "Boolean operation between two bodies.",
+      "params": {
+        "type": "object",
+        "required": ["op", "a", "b"],
+        "properties": {
+          "op": { "type": "string", "enum": ["union", "difference", "intersection"] },
+          "a": { "type": "string", "description": "id of body A" },
+          "b": { "type": "string", "description": "id of body B" }
+        }
+      }
+    }
+  }
+}

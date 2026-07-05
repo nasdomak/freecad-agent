@@ -1,0 +1,60 @@
+# -*- coding: utf-8 -*-
+"""
+start_bridge_client.FCMacro - ALTERNATIVE way to open the panel (Phase 1).
+
+From Phase 1 the RECOMMENDED way is to install the add-on as a workbench
+(INSTALL_ADDON.bat) and pick "FreeCAD Agent" from the workbench bar: the panel
+appears by itself. This macro remains as a shortcut for those who prefer to
+launch it by hand or have not (yet) installed the workbench.
+
+What it does: puts addon/ and shared/ on sys.path and opens the panel
+(show_panel()). From the panel: «Connect» -> compose a command -> «Run».
+"""
+
+import os
+import sys
+
+import FreeCAD
+
+# --- Paths (relative, with a fallback for the Python console) ----------------
+# This file lives in freecad-agent/addon/. In .FCMacro scripts run from the Macro
+# menu, __file__ IS defined; if instead you run it with exec(open(...).read())
+# from the Python console, __file__ does not exist: look for the installed copy
+# inside the FreeCAD Mod folder (INSTALL_ADDON.bat / Addon Manager).
+try:
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    _HERE = ""
+    _mod_root = os.path.join(FreeCAD.getUserAppDataDir(), "Mod")
+    for _name in ("FreeCADAgent", "freecad-agent", "FreeCAD-Agent"):
+        _cand = os.path.join(_mod_root, _name, "addon")
+        if os.path.isdir(_cand):
+            _HERE = _cand
+            break
+    if not _HERE:
+        raise RuntimeError(
+            "FreeCAD Agent: cannot locate the add-on folder. Install the add-on "
+            "first (INSTALL_ADDON.bat or the Addon Manager), or run this macro "
+            "from the Macro menu instead of the Python console."
+        )
+
+_ADDON_DIR = _HERE                                   # .../freecad-agent/addon
+_REPO_ROOT = os.path.dirname(_ADDON_DIR)             # .../freecad-agent
+_SHARED_DIR = os.path.join(_REPO_ROOT, "shared")     # .../freecad-agent/shared
+
+for _p in (_ADDON_DIR, _SHARED_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+FreeCAD.Console.PrintMessage(f"[FreeCAD Agent] addon dir : {_ADDON_DIR}\n")
+FreeCAD.Console.PrintMessage(f"[FreeCAD Agent] shared dir: {_SHARED_DIR}\n")
+
+# Ensure an active document (so created objects have somewhere to appear).
+if FreeCAD.ActiveDocument is None:
+    FreeCAD.newDocument("FreeCAD_Agent")
+    FreeCAD.Console.PrintMessage("[FreeCAD Agent] created new document 'FreeCAD_Agent'.\n")
+
+# Open the panel (the rest is done with the buttons).
+from ai_copilot.ui import show_panel
+show_panel()
+FreeCAD.Console.PrintMessage("[FreeCAD Agent] panel opened. Click «Connect» in the panel.\n")

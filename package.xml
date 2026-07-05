@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>FreeCAD Agent</name>
+  <description>
+    Local-AI copilot for FreeCAD: turns natural-language requests into real
+    modeling actions, from a single operation to a whole multi-step component.
+    Runs on a LOCAL model via Ollama (privacy-first, nothing leaves your
+    machine) on top of an unmodified FreeCAD base (an add-on, not a fork).
+    The add-on talks to a separate AI engine over a local JSON-RPC bridge; the
+    engine turns natural language into structured CAD commands (14 commands,
+    Part workbench) executed inside undoable transactions. When the vocabulary
+    is not enough it can run free Python, always shown to the user first.
+    MVP: results depend on the model, tested on Windows; macOS/Linux
+    experimental. Structured commands work without Ollama.
+  </description>
+  <version>0.12.0</version>
+  <date>2026-07-04</date>
+  <maintainer email="nasdomak@users.noreply.github.com">Marco Ascani</maintainer>
+  <license file="LICENSE">LGPL-2.1-or-later</license>
+  <icon>addon/ai_copilot/ui/icon.svg</icon>
+
+  <url type="repository" branch="main">https://github.com/nasdomak/freecad-agent</url>
+  <url type="readme">https://github.com/nasdomak/freecad-agent/blob/main/README.md</url>
+  <url type="bugtracker">https://github.com/nasdomak/freecad-agent/issues</url>
+
+  <!-- Compatibility: developed and validated on FreeCAD 1.1.x -->
+  <freecadmin>1.0.0</freecadmin>
+
+  <content>
+    <workbench>
+      <classname>FreeCADAgentWorkbench</classname>
+      <name>FreeCAD Agent</name>
+      <description>Panel to talk to the local AI engine and run structured commands.</description>
+      <subdirectory>./</subdirectory>
+      <icon>addon/ai_copilot/ui/icon.svg</icon>
+    </workbench>
+  </content>
+</package>
