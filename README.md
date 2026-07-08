@@ -9,7 +9,8 @@ your machine) and sits on top of an **unmodified** FreeCAD: it is an add-on, not
 > parts, but it is an early, non-commercial hobby/research project. Read the
 > [Limits](#limits) section before using it — honesty first.
 
-**[▶ Watch the demo](docs/media/demo.mp4)** *(2½ minutes, wait times trimmed)*
+**[▶ Watch the demo](https://dai.ly/xamziuq)** *(2½ minutes, wait times trimmed — also available as
+[mp4 in this repo](docs/media/demo.mp4))*
 
 ## What it does
 
